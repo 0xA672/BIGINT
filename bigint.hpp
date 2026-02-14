@@ -10,8 +10,8 @@
 #include <optional>
 #include <string>
 #include <ostream>
+#include <locale>
 #include <cstddef>
-#include <algorithm>
 #include <ios>
 
 namespace bigint_ns {
@@ -53,7 +53,7 @@ namespace bigint_ns {
         bool show_base = (flags & std::ios_base::showbase) != 0;
         bool uppercase = (flags & std::ios_base::uppercase) != 0;
 
-        if (show_base && base != 10) {
+        if (show_base && base != 10 && abs_s != "0") {
             if (base == 16)
                 abs_s = (uppercase ? "0X" : "0x") + abs_s;
             else if (base == 8)
@@ -66,27 +66,54 @@ namespace bigint_ns {
                     c -= 'a' - 'A';
         }
 
-        std::string result = negative ? "-" : "";
-        result += abs_s;
+        std::string result;
+        if (negative) {
+            result = "-";
+        } else if (base == 10 && (flags & std::ios_base::showpos) && abs_s != "0") {
+            result = "+";
+        }
 
         if (base == 10) {
-            size_t start = negative ? 1 : 0;
-            std::string digits = result.substr(start);
-            std::string formatted;
-            int len = static_cast<int>(digits.size());
-            int first_group = len % 3;
-            formatted.reserve(len + len / 3);
+            std::string digits = std::move(abs_s);
+            std::size_t len = digits.size();
+            if (len <= 3) {
+                result += digits;
+            } else {
+                char thousands_sep = ',';
+                std::string grouping = "\3";
+                try {
+                    const auto& np = std::use_facet<std::numpunct<char>>(os.getloc());
+                    thousands_sep = np.thousands_sep();
+                    grouping = np.grouping();
+                } catch (const std::bad_cast&) {
+                }
 
-            if (first_group != 0) {
-                formatted.append(digits, 0, first_group);
+                std::string formatted;
+                formatted.reserve(len + len / 3);
+
+                if (grouping.empty() || grouping[0] == '\0') {
+                    formatted = digits;
+                } else {
+                    std::size_t group = static_cast<unsigned char>(grouping[0]);
+                    if (group == 0) group = 3;
+                    std::size_t first_group = len % group;
+                    std::size_t pos = 0;
+                    if (first_group != 0) {
+                        formatted.append(digits, 0, first_group);
+                        pos = first_group;
+                    }
+                    while (pos < len) {
+                        if (pos != 0) formatted.push_back(thousands_sep);
+                        std::size_t take = group;
+                        if (pos + take > len) take = len - pos;
+                        formatted.append(digits, pos, take);
+                        pos += take;
+                    }
+                }
+                result += formatted;
             }
-
-            for (int i = first_group; i < len; i += 3) {
-                if (i != 0) formatted.push_back(',');
-                formatted.append(digits, i, 3);
-            }
-
-            result.replace(start, digits.length(), formatted);
+        } else {
+            result += abs_s;
         }
 
         return os << result;
