@@ -3,6 +3,7 @@
 
 #include <boost/multiprecision/cpp_int.hpp>
 #if __has_include(<gmp.h>)
+#define BIGINT_HAS_GMP
 #include <boost/multiprecision/gmp.hpp>
 #endif
 
@@ -11,6 +12,7 @@
 #include <ostream>
 #include <cstddef>
 #include <algorithm>
+#include <ios>
 
 namespace bigint_ns {
 
@@ -23,33 +25,70 @@ namespace bigint_ns {
     using BigInt = backend;
 
     inline namespace literals {
-        BigInt operator""_bi(const char* str, std::size_t) {
+        [[nodiscard]] BigInt operator""_bi(const char* str, std::size_t) {
             return BigInt(str);
         }
     }
 
-    inline std::optional<BigInt> from_string(const std::string& s) noexcept {
+    [[nodiscard]] inline std::optional<BigInt> from_string(const std::string& s) noexcept {
+        if (s.empty()) return std::nullopt;
         try { return BigInt(s); }
         catch (...) { return std::nullopt; }
     }
 
     template <typename CharT>
-    std::basic_ostream<CharT>& operator<<(std::basic_ostream<CharT>& os, const BigInt& num) {
-        std::string s = num.str();
-        if ((os.flags() & std::ios_base::showbase) || s.empty())
-            return os << s;
-        std::string result;
-        if (s[0] == '-') {
-            result += '-';
+    [[nodiscard]] std::basic_ostream<CharT>& operator<<(std::basic_ostream<CharT>& os, const BigInt& num) {
+        int base = 10;
+        auto flags = os.flags();
+        auto basefield = flags & std::ios_base::basefield;
+        if (basefield == std::ios_base::oct)
+            base = 8;
+        else if (basefield == std::ios_base::hex)
+            base = 16;
+
+        std::string s = num.str(base);
+        bool negative = !s.empty() && s[0] == '-';
+        std::string abs_s = negative ? s.substr(1) : s;
+
+        bool show_base = (flags & std::ios_base::showbase) != 0;
+        bool uppercase = (flags & std::ios_base::uppercase) != 0;
+
+        if (show_base && base != 10) {
+            if (base == 16)
+                abs_s = (uppercase ? "0X" : "0x") + abs_s;
+            else if (base == 8)
+                abs_s = "0" + abs_s;
         }
-        int cnt = 0;
-        for (auto it = s.rbegin(); it != s.rend() && *it != '-'; ++it) {
-            result.push_back(*it);
-            ++cnt;
-            if (cnt % 3 == 0 && it + 1 != s.rend() && *(it + 1) != '-')
-                result.push_back(',');
+
+        if (base == 16 && uppercase) {
+            for (char& c : abs_s)
+                if (c >= 'a' && c <= 'f')
+                    c -= 'a' - 'A';
         }
-        std::reverse(result.begin() + (s[0]=='-'?1:0), result.end());
+
+        std::string result = negative ? "-" : "";
+        result += abs_s;
+
+        if (base == 10) {
+            size_t start = negative ? 1 : 0;
+            std::string digits = result.substr(start);
+            std::string formatted;
+            int len = static_cast<int>(digits.size());
+            int first_group = len % 3;
+            formatted.reserve(len + len / 3);
+
+            if (first_group != 0) {
+                formatted.append(digits, 0, first_group);
+            }
+
+            for (int i = first_group; i < len; i += 3) {
+                if (i != 0) formatted.push_back(',');
+                formatted.append(digits, i, 3);
+            }
+
+            result.replace(start, digits.length(), formatted);
+        }
+
         return os << result;
     }
 
