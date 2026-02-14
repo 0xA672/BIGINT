@@ -33,7 +33,7 @@ namespace bigint_ns {
     [[nodiscard]] inline std::optional<BigInt> from_string(const std::string& s) noexcept {
         if (s.empty()) return std::nullopt;
         try { return BigInt(s); }
-        catch (...) { return std::nullopt; }
+        catch (const std::exception&) { return std::nullopt; } catch ( ... ) { return std::nullopt;}
     }
 
     template <typename CharT>
