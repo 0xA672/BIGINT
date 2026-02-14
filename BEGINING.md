@@ -46,5 +46,5 @@ If GMP is already installed on your system, you'll need to add two extra flags w
 
 Encountered an error?  
 `'g++' is not recognized as an internal or external command`: You don't have a compiler installed — if you're unsure what to do, ask an AI for help!  
-`fatal error: bigint.h: No such file or directory`: `bigint.hpp` is not in the same directory as your project file! Move it to the project directory!  
+`fatal error: bigint.hpp: No such file or directory`: `bigint.hpp` is not in the same directory as your project file! Move it to the project directory!  
 `#error "This header requires Boost 1.75 or higher"`: Please install the latest Boost!
